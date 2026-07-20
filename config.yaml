@@ -1,0 +1,216 @@
+# Search queries run in parallel against Upwork's job feed each cycle (one search
+# per keyword). Keep these broad-but-relevant; the LLM scope filter does the
+# nuanced relevance judgement on each returned job's description.
+search_keywords:
+  - "AI agent"
+  - "LangChain"
+  - "LangGraph"
+  - "RAG chatbot"
+  - "LLM"
+  - "MCP server"
+  - "AI automation"
+  - "n8n"
+  - "machine learning"
+  - "Next.js"
+  - "React"
+  - "FastAPI"
+  - "web scraping"
+
+# Incremental fetch window. Each cycle pages recency-sorted results back to
+# (now - fetch_lookback_minutes) by publishTime, then stops. Keep this WIDER than
+# your poll interval (POLL_INTERVAL_SECONDS, default 300s / 5 min) so a late or
+# failed run self-heals next cycle; the seen-jobs DB dedups the overlap so nothing
+# is sent twice. e.g. 5-min poll + 30-min window tolerates ~25 min of missed runs.
+fetch_lookback_minutes: 50
+
+# Pipeline concurrency knobs.
+browser_pool_size: 2          # parallel Chrome instances (captcha click still serialized)
+max_pipeline_concurrency: 6   # concurrent per-job pipeline tasks
+captcha_lock_timeout_seconds: 60  # max wait for the captcha-click lock before failing that job
+                                   # instead of blocking every other job forever (see browser_fetcher.py)
+client_panel_wait_seconds: 30     # hard load timeout: max wait for the "About the client" panel
+                                   # (Vue-hydrated after the job body) to render. If it never appears
+                                   # (page cleared Cloudflare but content never loaded), the job is
+                                   # abandoned so the pooled browser is freed for the next job. Too
+                                   # short -> false "client has no prior hires" rejects on slow loads.
+
+# Browser visibility. headless removes the Chrome windows. On Linux set both
+# browser_headless + browser_xvfb true so the captcha solve still works on a
+# virtual display. On macOS there is no xvfb - headless breaks the captcha click,
+# so leave headless false there (only browser_pool_size windows open, reused).
+browser_headless: false
+browser_xvfb: false
+
+# Human-readable service areas. No longer used for regex matching - passed to the
+# LLM scope filter as context describing what is in-scope for this freelancer.
+scope:
+  - name: "Agentic AI & Automation Workflows"
+    keywords: ["langgraph", "crewai", "langchain", "n8n", "make.com", "zapier", "agentic ai", "multi-agent", "ai automation", "agentic workflows", "multi-agent workflows", "agent orchestration", "agentic ai orchestration", "agentic ai pipelines", "agentic ai systems", "claude code", "openai agents sdk", "agentic rag", "airtable", "workflow automation"]
+  - name: "Generative AI & Chatbot Dev"
+    keywords: ["llm", "chatbot", "rag", "retrieval augmented generation", "gpt", "openai", "embeddings", "structured output", "claude", "anthropic", "pinecone", "faiss", "vector search", "vector database", "llm orchestration", "weaviate", "qdrant", "llamaindex", "gemini", "conversational ai", "ai assistant", "chatbot development", "customer support chatbot", "knowledge base", "document q&a", "semantic search", "chromadb", "streamlit"]
+  - name: "Custom MCP Server Development"
+    keywords: ["model context protocol", "mcp server", "mcp"]
+  - name: "Machine Learning & Deep Learning"
+    keywords: ["pytorch", "tensorflow", "scikit-learn", "deep learning", "machine learning model", "classification", "forecasting"]
+  - name: "NLP & LLM Workflows"
+    keywords: ["nlp", "huggingface", "bert", "mistral", "summarization", "prompt chaining", "prompt engineering", "prompt optimization", "llm pipelines", "llm workflow", "llm orchestration", "fine-tuning", "llm fine-tuning", "llm training", "llm evaluation", "llm testing", "llm inference", "llm deployment"]
+  - name: "Frontend Development"
+    keywords: ["next.js", "nextjs", "react", "tailwind", "typescript", "frontend", "ssr"]
+  - name: "Backend Development"
+    keywords: ["fastapi", "postgresql", "supabase", "rest api", "backend", "jwt auth", "node.js", "express", "mongodb", "redis", "graphql", "websocket", "stripe", "payment integration", "api integration", "django", "flask"]
+  - name: "API Dev & Deployment"
+    keywords: ["docker", "vercel", "digitalocean", "api deployment", "reverse proxy", "dockerized", "aws", "cloud deployment", "ci/cd", "cloud hosting", "vps deployment", "render", "railway", "nginx"]
+  - name: "Model Deployment"
+    keywords: ["model deployment", "sagemaker", "vast.ai", "inference endpoint", "runpod", "model hosting", "llm deployment"]
+  - name: "Automation & Scraping"
+    keywords: ["selenium", "beautifulsoup", "scraping", "web scraping", "data collection bot", "browser automation", "crawler", "data extraction"]
+  - name: "Data Analysis & Dashboards"
+    keywords: ["pandas", "power bi", "seaborn", "plotly", "dashboard", "data analysis"]
+  - name: "Conversational Voice AI & Telephony"
+    keywords: ["vapi", "retell", "bland", "twilio", "livekit", "elevenlabs", "voice agent", "voice ai", "telephony", "ivr", "phone agent", "voice receptionist", "speech to text", "text to speech", "stt", "tts", "whisper", "deepgram", "voice bot", "ai receptionist", "cal.com", "gohighlevel"]
+
+
+# Hard acceptance gates (all must pass - first failure rejects the job) plus
+# weights for scoring jobs that pass. See scorer.py for the exact gate order.
+scoring:
+  max_job_age_hours: 48              # reject jobs posted more than this many hours ago
+  min_pay_rate_usd_per_hr: 8
+  min_fixed_price_usd: 50
+  reject_if_interviewing: true       # reject if client is already interviewing someone
+  reject_if_freelancers_invited: true  # reject if client already invited other freelancers
+  reject_if_no_hires: true           # reject if client has zero prior hires on Upwork
+  reject_countries: ["India", "Israel"]
+  max_proposal_count: 15             # hard reject if proposal count tier exceeds this; also scoring weight (fewer is better)
+
+freelancer_profile:
+  title: "AI Full Stack Developer | GenAI, SaaS, Agentic AI, MVP Expert"
+  badges: ["Top Rated", "100% Job Success Score"]
+  years_experience: 3
+  projects_delivered: 20
+  hourly_rate_usd: 20
+  bidding_rule: >
+    Max rate is $20/hr. If the client's posted hourly rate is at or below $20/hr, match it
+    (e.g. a $10/hr job gets a $10/hr bid). If their posted rate is above $20/hr, bid
+    competitively between $15-20/hr rather than going to the full ceiling. For fixed-price
+    jobs, bid within the client's stated budget - at or under it if reasonable, competitively
+    rather than over it if their budget is tight.
+  # All entries below are live, running production apps (not side projects) - prioritize
+  # the 1-2 most relevant to the job when drafting proposals.
+  portfolio:
+    - name: "WriteWisely.ai"
+      summary: "Co-founded, full-stack AI writing assistant SaaS"
+      tech: ["OpenAI", "LangGraph", "FastAPI", "Supabase", "Next.js", "Docker", "n8n"]
+    - name: "EduWriter.ai"
+      summary: "AI essay generator with detector-safe LLM models and citation automation"
+      tech: ["OpenAI", "LangChain", "FastAPI", "Citation APIs"]
+    - name: "Castiko.com"
+      summary: "Actors portfolio platform, high-traffic responsive SSR-optimized UI revamp"
+      tech: ["Next.js (App Router)", "Tailwind", "TypeScript"]
+    - name: "isgen.ai"
+      summary: "Full-stack AI content-detection SaaS built from scratch"
+      tech: ["FastAPI", "Supabase", "GPT-4", "Next.js", "Vercel"]
+    - name: "TrustAnalytica.com"
+      summary: "NLP review analytics: sentiment analysis and topic clustering pipelines"
+      tech: ["Python", "Pandas", "spaCy", "Selenium"]
+    - name: "HumanizerPro.ai"
+      summary: "AI humanization tool - dataset creation, preprocessing, fine-tuning to bypass AI detectors"
+      tech: ["HuggingFace", "GPT", "Prompt Engineering", "Pandas"]
+    - name: "Traiveller.ai"
+      summary: "SaaS application"
+      tech: []
+  tech_stack:
+    ai_ml: ["PyTorch", "TensorFlow", "Keras", "Scikit-learn", "HuggingFace", "OpenAI", "spaCy", "NLTK",
+            "LangChain", "LangGraph", "CrewAI", "n8n", "Make.com", "Zapier", "Selenium",
+            "PostgreSQL", "Supabase", "FAISS", "Pinecone", "Docker", "Vercel", "DigitalOcean", "AWS", "Vast.ai"]
+    full_stack: ["React.js", "Next.js (App Router)", "Tailwind CSS", "TypeScript", "Zustand", "React Query",
+                 "FastAPI", "Supabase (Postgres, Auth, RLS)", "Node.js (Express)", "MongoDB",
+                 "OpenAI API", "Stripe", "REST APIs", "Git", "GitHub", "CI/CD"]
+
+proposal_style:
+  general_role_job:
+    description: "Jobs phrased as a role/title, e.g. 'Senior AI Engineer', 'Next.js Developer'"
+    structure: "Lead with relevant past work/experience that matches the role title."
+  specific_project_job:
+    description: "Jobs describing a specific project, product, or problem to solve"
+    structure: "Solution -> Tech Stack -> Relevant Work. Briefly propose an approach to their stated problem, name the tech stack to be used, then back it with a matching portfolio example."
+
+# Reference proposals used to anchor writing tone, depth, and structure.
+# The LLM is told NOT to copy these - they are style guides only.
+proposal_examples:
+  general: |
+    Hi,
+
+    I'm Abubakar, a Full Stack AI/ML Engineer with 5+ years of experience building AI products, scalable data systems, agentic workflows, and production-grade automation platforms. My expertise covers the complete AI lifecycle including Data Engineering, Machine Learning, LLM Applications, Backend Development, Cloud Infrastructure, and DevOps.
+
+    I've worked extensively with Python, SQL, FastAPI, LangGraph, cloud-based architectures, vector databases, automation systems, and scalable AI pipelines. Alongside AI/ML expertise, I also handle deployment, infrastructure, Dockerized environments, reverse proxies, CI/CD workflows, and production optimization.
+
+    Relevant Product & Professional Experience:
+
+    1. WriteWisely.ai - AI-Powered Writing Assistant
+    Generative AI platform for academic content generation with multi-agent AI workflows for writing, evaluation, citations, and SEO optimization. Built scalable agentic pipelines, automated research systems, structured content evaluation, and deployment architecture.
+    Tech Stack: Python, OpenAI, Gemini, LangGraph, FastAPI, Supabase, Tavily, Docker, NGINX, PostgreSQL, n8n, Vector Search, SEO Automation
+
+    2. EduWriter.ai - AI-Powered Academic Writer
+    AI-powered academic essay generation engine focused on structured long-form writing, citation integration, multilingual workflows, and AI-humanized content generation.
+    Tech Stack: Python, OpenAI, LangGraph, Citation Systems, FastAPI, NLP Pipelines, Structured Generation Workflows
+
+    Availability:
+    Full-Time Availability
+
+    Pricing:
+    $13-15/hr (Negotiable)
+
+    Why I'm a Strong Fit:
+    I'm not only an AI/ML Engineer but a Full Stack AI Engineer capable of handling the entire lifecycle of AI products, from data ingestion, model pipelines, backend APIs, deployment infrastructure, cloud integration, automation workflows, and DevOps. This allows me to contribute beyond just models and help build complete scalable AI-driven systems end-to-end.
+
+    I'd love to discuss how I can contribute to your AI/ML and data engineering initiatives.
+
+    Best Regards,
+    Abubakar
+
+  project: |
+    Hi,
+
+    I'm Abubakar, an AI Engineer with 3+ years of experience building production-level AI products, conversational agents, automation systems, and scalable backend infrastructures. I specialize in designing intelligent AI systems that handle real users, real traffic, and real business conversions, not just demo chatbots.
+
+    High-Level Solution Approach
+
+    To convert Facebook Marketplace inquiries into dealership appointments, I would build a structured, high-conversion AI messaging system designed specifically for lead qualification and appointment booking.
+
+    1. Facebook Messaging Integration Layer
+    Integration via Meta Graph API / Facebook Messenger Platform
+    Webhook-based real-time message handling
+    Async processing using FastAPI
+    Secure token & access management
+
+    2. AI Conversation Engine (Conversion-Focused)
+    Instead of a generic chatbot, I will implement a structured qualification workflow.
+    Technical Architecture: OpenAI/Gemini/Anthropic LLMs for reasoning, LangGraph multi-agent workflow (Responder + Qualifier + Scheduler), conversation memory (Redis / DB session store), structured output schema for CRM-ready data, lead scoring logic (Hot / Warm / Cold).
+
+    3. Lead Qualification Funnel
+    The chatbot will naturally guide users through a pipeline - vehicle interest, budget range, financing or cash, trade-in, visit scheduling, etc. Each conversation generates a structured lead profile, lead score, and appointment intent indicator.
+
+    4. Backend & Infrastructure
+    FastAPI backend, Supabase for DB, calendar integration, automated confirmation messages, follow-up reminder workflows.
+
+    Successful Products I've Built
+
+    1. writewisely.ai - AI-powered Academic Writing
+    Multi-agent generation + evaluator loops, structured reasoning, citation automation, and scalable backend infrastructure.
+    Tech: GPT-4o, LangGraph, FastAPI, Supabase, Docker, NGINX.
+
+    2. traiveller.ai - AI Travel Agent
+    AI-powered travel agent system that interacts conversationally, understands user preferences, and generates structured travel plans dynamically.
+    Tech: LLM orchestration, backend APIs, structured output pipelines.
+
+    Why I'm Perfect for This
+    I build complete end-to-end systems - not just chatbot prompts, but complete AI, automation, backend, and deployment solutions. You won't need separate AI, backend, or DevOps engineers. I handle the full stack from conversation logic to production deployment.
+
+    Availability: Full-time availability in US hours
+
+    Cost: $13-15/hour (negotiable)
+
+    I'd be happy to build a high-converting AI system that turns your vision into a production-ready, scalable solution.
+
+    Regards,
+    Abubakar Majid.
