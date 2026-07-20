@@ -2,7 +2,7 @@
 
 Each cycle: incremental concurrent fetch -> submit one independent pipeline task
 per new job. A task flows LLM scope filter -> browser fetch (pooled, captcha
-serialized) -> code metric scoring -> proposal draft -> Slack. Jobs run
+serialized) -> code metric scoring -> proposal draft -> Discord. Jobs run
 concurrently and a job that clears scoring is sent the instant it's ready - the
 loop never waits for the whole batch.
 """
@@ -20,7 +20,7 @@ from openai import OpenAI
 from browser_fetcher import BrowserPool
 from db import JobStore, NullJobStore
 from job_fetcher import JobFetcher
-from notifier_slack import SlackNotifier
+from notifier_discord import DiscordNotifier
 from proposal_drafter import draft_proposal
 from scope_filter import scope_filter_job
 from scorer import score_job
@@ -131,7 +131,7 @@ def main():
     if not persist_jobs:
         log.warning("PERSIST_JOBS disabled - jobs are NOT being recorded (dev mode; every run re-processes all jobs)")
     fetcher = JobFetcher()
-    notifier = SlackNotifier()
+    notifier = DiscordNotifier()
     llm_client = OpenAI()  # reads OPENAI_API_KEY
 
     with BrowserPool(
