@@ -13,6 +13,8 @@ headless=True leaves the captcha-click with no screen to act on - run visible th
 agent in a Linux container.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import queue
