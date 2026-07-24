@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.venv
+__pycache__/
+**/__pycache__/
+*.pyc
+resources/jobs.db
+resources/debug/
+src/downloaded_files/
+*.lock

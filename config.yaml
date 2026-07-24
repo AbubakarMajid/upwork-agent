@@ -39,7 +39,7 @@ client_panel_wait_seconds: 30     # hard load timeout: max wait for the "About t
 # virtual display. On macOS there is no xvfb - headless breaks the captcha click,
 # so leave headless false there (only browser_pool_size windows open, reused).
 browser_headless: true
-browser_xvfb: false
+browser_xvfb: true
 
 # Human-readable service areas. No longer used for regex matching - passed to the
 # LLM scope filter as context describing what is in-scope for this freelancer.
