@@ -21,10 +21,10 @@ search_keywords:
 # your poll interval (POLL_INTERVAL_SECONDS, default 300s / 5 min) so a late or
 # failed run self-heals next cycle; the seen-jobs DB dedups the overlap so nothing
 # is sent twice. e.g. 5-min poll + 30-min window tolerates ~25 min of missed runs.
-fetch_lookback_minutes: 50
+fetch_lookback_minutes: 20
 
 # Pipeline concurrency knobs.
-browser_pool_size: 2          # parallel Chrome instances (captcha click still serialized)
+browser_pool_size: 3         # parallel Chrome instances (captcha click still serialized)
 max_pipeline_concurrency: 6   # concurrent per-job pipeline tasks
 captcha_lock_timeout_seconds: 60  # max wait for the captcha-click lock before failing that job
                                    # instead of blocking every other job forever (see browser_fetcher.py)
@@ -38,7 +38,7 @@ client_panel_wait_seconds: 30     # hard load timeout: max wait for the "About t
 # browser_headless + browser_xvfb true so the captcha solve still works on a
 # virtual display. On macOS there is no xvfb - headless breaks the captcha click,
 # so leave headless false there (only browser_pool_size windows open, reused).
-browser_headless: false
+browser_headless: true
 browser_xvfb: false
 
 # Human-readable service areas. No longer used for regex matching - passed to the
@@ -78,9 +78,10 @@ scoring:
   min_fixed_price_usd: 50
   reject_if_interviewing: true       # reject if client is already interviewing someone
   reject_if_freelancers_invited: true  # reject if client already invited other freelancers
+  reject_if_job_already_hired: true  # reject if this posting has already hired someone (job is filled)
   reject_if_no_hires: true           # reject if client has zero prior hires on Upwork
-  reject_countries: ["India", "Israel"]
-  max_proposal_count: 15             # hard reject if proposal count tier exceeds this; also scoring weight (fewer is better)
+  reject_countries: ["India", "Israel", "Pakistan"]
+  max_proposal_count: 20             # hard reject if proposal count tier exceeds this; also scoring weight (fewer is better)
 
 freelancer_profile:
   title: "AI Full Stack Developer | GenAI, SaaS, Agentic AI, MVP Expert"

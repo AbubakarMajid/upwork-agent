@@ -9,6 +9,7 @@ Acceptance is a hard gate (all must pass, in order - first failure rejects):
   - proposal count does not exceed the max (reject if already > 15 proposals)
   - client isn't already interviewing anyone
   - client hasn't already invited other freelancers
+  - this posting hasn't already hired anyone (job effectively filled = reject)
   - client has at least one prior hire (no hire history = reject)
   - client isn't located in a rejected country
 
@@ -154,6 +155,12 @@ def score_job(
     invites = _parse_count(details.invites_sent)
     if rules.get("reject_if_freelancers_invited", True) and invites > 0:
         return ScoreResult(passed=False, score=0, reasons=[f"freelancers already invited ({details.invites_sent})"])
+
+    # Hires on this specific posting: if the client already hired anyone for this
+    # job, it's effectively filled - reject. Absent row means 0 (see _extract).
+    job_hires = _parse_count(details.job_hires)
+    if rules.get("reject_if_job_already_hired", True) and job_hires > 0:
+        return ScoreResult(passed=False, score=0, reasons=[f"job already has {job_hires} hire(s) ({details.job_hires})"])
 
     hires = _parse_hires(details.client_hires)
     if rules.get("reject_if_no_hires", True) and not hires:

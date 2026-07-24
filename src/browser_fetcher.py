@@ -33,7 +33,7 @@ _DEBUG_DIR = Path(__file__).resolve().parent.parent / "resources" / "debug"
 # How many times to (re)load a job page before giving up. Cloudflare sometimes
 # clears the challenge but wedges on the "Verification successful. Waiting for
 # www.upwork.com to respond" interstitial; re-opening the URL usually unsticks it.
-_MAX_LOAD_ATTEMPTS = 3
+_MAX_LOAD_ATTEMPTS = 2
 
 
 def _dump_debug(html: str, job_id: str) -> None:
@@ -60,6 +60,7 @@ class JobDetails:
     interviewing: str | None = None
     invites_sent: str | None = None
     unanswered_invites: str | None = None
+    job_hires: str | None = None  # hires on THIS posting (activity section), not the client's lifetime total
     client_member_since: str | None = None
     client_location: str | None = None
     client_total_spent: str | None = None
@@ -149,6 +150,8 @@ def _extract(html: str, job_id: str, url: str) -> JobDetails:
     details.interviewing = activity.get("Interviewing")
     details.invites_sent = activity.get("Invites sent")
     details.unanswered_invites = activity.get("Unanswered invites")
+    # Hires on THIS posting - Upwork omits the row when it's zero, so absent means 0.
+    details.job_hires = activity.get("Hires") or activity.get("Hired")
 
     contract_date = soup.select_one('[data-qa="client-contract-date"]')
     details.client_member_since = contract_date.get_text(strip=True) if contract_date else None
@@ -221,7 +224,15 @@ class BrowserFetcher:
         # xvfb (Linux virtual display) lets the GUI captcha click work without a
         # visible window. On macOS there is no xvfb - headless there means the
         # captcha-click step has no screen to click on (see module note).
-        self._ctx = SB(uc=True, test=True, headless=self._headless, xvfb=self._xvfb)
+        sb_kwargs = dict(uc=True, test=True, headless=self._headless, xvfb=self._xvfb)
+        # CHROME_BINARY_PATH lets a host use a system Chromium instead of the one
+        # SeleniumBase auto-downloads - needed on arm64 Linux, where Google ships
+        # no linux-arm64 chromedriver so the auto-download path can't run. Unset on
+        # x86_64 (the intended deploy), so default behavior is unchanged there.
+        chrome_binary = os.environ.get("CHROME_BINARY_PATH")
+        if chrome_binary:
+            sb_kwargs["binary_location"] = chrome_binary
+        self._ctx = SB(**sb_kwargs)
         self._sb = self._ctx.__enter__()
         # Bound every WebDriver call. Without this, a page stuck loading (e.g. a
         # wedged Cloudflare interstitial) leaves the browser in a perpetual load

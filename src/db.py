@@ -78,6 +78,32 @@ class JobStore:
     def mark_notified(self, job_id: str, title: str | None = None) -> None:
         self._set_status(job_id, "notified", title)
 
+    def list_jobs(self, status: str | None = None, limit: int = 100) -> list[dict]:
+        """Return recorded jobs (newest first), optionally filtered by status."""
+        sql = (
+            "SELECT job_id, title, status, publish_time, first_seen_at, updated_at "
+            "FROM seen_jobs "
+        )
+        params: list = []
+        if status:
+            sql += "WHERE status = ? "
+            params.append(status)
+        sql += "ORDER BY updated_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            self._conn.row_factory = sqlite3.Row
+            cur = self._conn.execute(sql, params)
+            rows = [dict(r) for r in cur.fetchall()]
+            self._conn.row_factory = None
+        return rows
+
+    def counts_by_status(self) -> dict[str, int]:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT status, COUNT(*) FROM seen_jobs GROUP BY status"
+            )
+            return {status: n for status, n in cur.fetchall()}
+
     def close(self) -> None:
         with self._lock:
             self._conn.close()
@@ -106,6 +132,12 @@ class NullJobStore:
 
     def mark_notified(self, job_id: str, title: str | None = None) -> None:
         pass
+
+    def list_jobs(self, status: str | None = None, limit: int = 100) -> list[dict]:
+        return []
+
+    def counts_by_status(self) -> dict[str, int]:
+        return {}
 
     def close(self) -> None:
         pass

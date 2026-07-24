@@ -48,8 +48,10 @@ def _process_job(job, config, store, browser, notifier, llm_client) -> str:
     #    don't retry a job that keeps failing.
     try:
         details = browser.fetch(job.id)
-    except Exception:
-        log.exception(f"browser fetch failed for job {job.id}")
+    except Exception as e:
+        # Expected, fully-handled outcome (page never loaded / captcha stuck): log a
+        # one-line reason, not a stack trace, so it doesn't read like an unhandled crash.
+        log.warning(f"browser fetch failed for job {job.id}: {e}")
         store.mark_seen(job.id, job.title)
         return f"browser-failed: {job.title}"
 
